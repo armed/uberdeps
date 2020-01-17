@@ -21,11 +21,14 @@
                        (map keyword)
                        (into #{})))
         main-class (get args "--main-class")
+        slim?      (boolean (get args "--slim"))
         level      (keyword (or (get args "--level") "debug"))]
     (binding [api/level level]
       (deps.dir/with-dir deps-dir 
         (api/package
           (edn/read-string (slurp deps-file))
           target
-          {:aliases aliases :main-class main-class})))
+          {:aliases aliases
+           :slim? slim?
+           :main-class main-class})))
     (shutdown-agents)))

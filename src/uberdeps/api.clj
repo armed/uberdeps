@@ -73,8 +73,13 @@
           (copy-stream-filtered in (.getName entry) (.getLastModifiedTime entry) out))
         (recur (.getNextEntry in))))))
 
+(defn copy-to-lib-dir [^File file ^File out-dir]
+  (let [out-file (io/file (str (.getAbsolutePath out-dir) "/" (.getName file)))]
+    (when-not (some #(re-matches % (.getAbsolutePath file)) exclusions)
+      (io/copy file out-file))))
 
-(defn package* [path out]
+(defn package*
+  [path out]
   (let [file (io/file path)
         file (if (.isAbsolute file) file (io/file deps.dir/*the-dir* file))]
     (cond
@@ -85,7 +90,9 @@
       (copy-directory file out)
 
       (str/ends-with? path ".jar")
-      (copy-jar file out)
+      (if (= File (type out))
+        (copy-to-lib-dir file out)
+        (copy-jar file out))
 
       :else
       (throw (ex-info (str ":( Unknown entity at classpath: " path) {:path path})))))
@@ -156,16 +163,21 @@
   ([deps target] (package deps target {}))
   ([deps ^String target opts]
    (let [deps-map (deps-map deps opts)
-         t0       (System/currentTimeMillis)]
+         t0       (System/currentTimeMillis)
+         target-dir (.getParentFile (io/file target))
+         lib-dir (io/file (str (.getAbsolutePath target-dir) "/libs"))]
      (when (#{:debug :info} level)
        (println (str "[uberdeps] Packaging " target "...")))
      (binding [*seen-files (atom {})
                *seen-libs  (atom #{})]
-       (when-let [p (.getParentFile (io/file target))]
-         (.mkdirs p))
+       (when target-dir
+         (.mkdirs lib-dir))
        (with-open [out (JarOutputStream. (BufferedOutputStream. (FileOutputStream. target)))]
          (package-manifest opts out)
          (package-paths deps-map out)
-         (package-libs deps-map out)))
+         (package-libs deps-map (if (:slim? opts) lib-dir out))))
      (when (#{:debug :info} level)
        (println (str "[uberdeps] Packaged " target " in " (- (System/currentTimeMillis) t0) " ms"))))))
+
+(comment
+  (= File (type (io/file "foo.txt"))))
